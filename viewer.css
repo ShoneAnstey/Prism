@@ -645,7 +645,7 @@ a:hover {
 /* --- Dashboard Layout --- */
 .dashboard-layout {
   display: grid;
-  grid-template-columns: 2.5fr 1fr;
+  grid-template-columns: 2fr 1fr;
   align-items: start;
   gap: 40px;
   max-width: 100%;
@@ -684,8 +684,12 @@ a:hover {
 
 .daily-mix-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+
+.dashboard-layout.stacked-view .daily-mix-list {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
 /* Daily Mix Sidebar Card */
