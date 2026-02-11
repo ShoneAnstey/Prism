@@ -43,6 +43,10 @@ Beautiful RSS/Atom/XML reader with feed subscriptions, reading stats, keyword wa
 ### 🏗️ Built with
 Pure vanilla JavaScript. Zero dependencies. Lightning fast.
 
+### 🔓 Open Source
+Prism is fully open source. Check out the code or contribute on GitHub:
+https://github.com/ShoneAnstey/Prism
+
 ---
 
 ## Category
