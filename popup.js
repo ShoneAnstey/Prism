@@ -1,0 +1,169 @@
+async function getCurrentTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab;
+}
+
+async function getXmlContent(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return await response.text();
+}
+
+function parseXml(xmlString) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlString, "application/xml");
+  const parserError = doc.getElementsByTagName("parsererror")[0];
+  if (parserError) {
+    throw new Error(parserError.textContent || "XML parse error");
+  }
+  return doc;
+}
+
+function buildTree(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.nodeValue.trim();
+    if (!text) return null;
+    const span = document.createElement("span");
+    span.className = "xml-text";
+    span.textContent = text;
+    return span;
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) return null;
+
+  const container = document.createElement("div");
+  container.className = "xml-node";
+
+  const header = document.createElement("div");
+  header.className = "xml-node-header";
+  header.textContent = `<${node.nodeName}>`;
+  container.appendChild(header);
+
+  const childrenWrapper = document.createElement("div");
+  childrenWrapper.className = "xml-children";
+
+  for (const child of node.childNodes) {
+    const childView = buildTree(child);
+    if (childView) childrenWrapper.appendChild(childView);
+  }
+
+  container.appendChild(childrenWrapper);
+
+  header.addEventListener("click", () => {
+    childrenWrapper.classList.toggle("collapsed");
+  });
+
+  return container;
+}
+
+(async () => {
+  const status = document.getElementById("status");
+
+  try {
+    const tab = await getCurrentTab();
+
+    if (!tab.url) {
+      throw new Error("Cannot access tab URL.");
+    }
+
+    status.textContent = "Scanning for feeds...";
+
+    // 1. Ask background for detected feeds on this tab
+    let detected = null;
+    try {
+      detected = await chrome.runtime.sendMessage({
+        action: "getDetectedFeedsForTab",
+        tabId: tab.id
+      });
+    } catch (e) {
+      console.log("No background response:", e);
+    }
+
+    if (detected && detected.feeds && detected.feeds.length > 0) {
+      const feeds = detected.feeds;
+
+      if (feeds.length === 1) {
+        // Single feed — open it directly
+        status.textContent = "Opening feed...";
+        const xmlString = await getXmlContent(feeds[0].url);
+        await chrome.storage.local.set({
+          xmlData: xmlString,
+          currentFeedUrl: feeds[0].url
+        });
+        await chrome.tabs.create({ url: "reader.html" });
+        window.close();
+        return;
+      }
+
+      // Multiple feeds — show picker
+      status.textContent = `${feeds.length} feeds found!`;
+
+      const list = document.createElement("div");
+      list.style.cssText = "margin-top:10px; max-height:250px; overflow-y:auto;";
+
+      feeds.forEach(feed => {
+        const btn = document.createElement("button");
+        btn.style.cssText = "display:block; width:100%; padding:8px 12px; margin:4px 0; background:#2a2a3e; color:#fff; border:1px solid #444; border-radius:8px; cursor:pointer; text-align:left; font-size:13px;";
+        btn.textContent = feed.title || feed.url;
+        btn.title = feed.url;
+        btn.addEventListener("click", async () => {
+          status.textContent = "Loading feed...";
+          list.style.display = "none";
+          try {
+            const xmlString = await getXmlContent(feed.url);
+            await chrome.storage.local.set({ xmlData: xmlString, currentFeedUrl: feed.url });
+            await chrome.tabs.create({ url: "reader.html" });
+            window.close();
+          } catch (err) {
+            status.textContent = "Failed: " + err.message;
+            list.style.display = "block";
+          }
+        });
+        list.appendChild(btn);
+      });
+
+      // Add "Open Dashboard" option
+      const dashBtn = document.createElement("button");
+      dashBtn.style.cssText = "display:block; width:100%; padding:8px 12px; margin:8px 0 4px; background:#a855f7; color:#fff; border:none; border-radius:8px; cursor:pointer; text-align:center; font-size:13px; font-weight:bold;";
+      dashBtn.textContent = "📚 Open Dashboard";
+      dashBtn.addEventListener("click", async () => {
+        await chrome.tabs.create({ url: "home.html" });
+        window.close();
+      });
+      list.appendChild(dashBtn);
+
+      status.parentNode.appendChild(list);
+      return; // Keep popup open for selection
+    }
+
+    // 2. Fallback: Try direct XML fetch (original behavior)
+    status.textContent = "Checking content...";
+    try {
+      const response = await fetch(tab.url, { method: 'HEAD' });
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("xml") || tab.url.endsWith(".xml") || tab.url.endsWith(".rss")) {
+        status.textContent = "Fetching XML...";
+        const xmlString = await getXmlContent(tab.url);
+        await chrome.storage.local.set({
+          xmlData: xmlString,
+          currentFeedUrl: tab.url
+        });
+        await chrome.tabs.create({ url: "reader.html" });
+      } else {
+        throw new Error("Not an XML file");
+      }
+    } catch (e) {
+      console.log("Not an XML page, opening Dashboard.", e);
+      await chrome.tabs.create({ url: "home.html" });
+    }
+
+    window.close();
+
+  } catch (e) {
+    console.error(e);
+    status.textContent = "Failed: " + e.message;
+  }
+})();

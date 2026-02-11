@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Prism XML/RSS Reader</title>
+  <link rel="icon" type="image/png" href="icon128.png">
+  <link rel="stylesheet" href="viewer.css" />
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet" />
+</head>
+
+<body>
+  <div id="loading" class="loading">Loading Document...</div>
+
+  <div id="app" class="hidden">
+    <div class="header">
+      <h1>XML Viewer</h1>
+      <!-- Close button (top right) -->
+      <button id="close-btn" class="close-btn" aria-label="Close Tab">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div id="content" class="content"></div>
+  </div>
+
+  <script src="viewer.js"></script>
+</body>
+
+</html>
