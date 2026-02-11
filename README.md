@@ -5,7 +5,7 @@
 Prism Reader transforms raw XML feeds into an elegant, visual reading experience — complete with a dashboard, reading stats, keyword watchlist, and more.
 
 <p align="center">
-  <img src="icon128.png" alt="Prism Reader icon" width="96">
+  <img src="images/icon128.png" alt="Prism Reader icon" width="96">
 </p>
 
 ---
@@ -106,14 +106,21 @@ Prism Reader transforms raw XML feeds into an elegant, visual reading experience
 
 ```
 prism-reader/
+├── images/                # All image assets
+│   ├── icon16/32/48/128.png   # Extension icons
+│   └── lightning-qr.png       # Lightning Network donation QR
+├── scripts/               # Build/generation utilities
+│   ├── generate_icon.py
+│   └── generate_emoji_icon.py
+├── docs/                  # Store & legal docs
+│   ├── PRIVACY.md
+│   └── STORE_LISTING.md
 ├── manifest.json          # Extension manifest (MV3)
 ├── background.js          # Service worker (alarms, badges, OPML sync)
 ├── content-detect.js      # Auto-detect RSS/Atom feeds on pages
 ├── popup.html / popup.js  # Toolbar popup (feed detection UI)
 ├── viewer.html / viewer.js / viewer.css  # Main reader + dashboard
-├── home.html / reader.html # Entry points for dashboard & reader
-├── lightning-qr.png       # Lightning Network donation QR code
-└── icon*.png              # Extension icons (16, 32, 48, 128)
+└── home.html / reader.html # Entry points for dashboard & reader
 ```
 
 ---
@@ -140,7 +147,7 @@ If you find Prism Reader useful, consider supporting development via the **Light
 Click the ⚡ button in the dashboard, or scan:
 
 <p align="center">
-  <img src="lightning-qr.png" alt="Lightning QR Code" width="200">
+  <img src="images/lightning-qr.png" alt="Lightning QR Code" width="200">
 </p>
 
 ```

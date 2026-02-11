@@ -17,7 +17,7 @@ def create_emoji_icon():
         except Exception as e:
             print(f"Warning: Emoji font error: {e}")
             draw.rectangle([20, 20, 108, 108], fill="blue")
-            img.save("icon128.png")
+            img.save("../images/icon128.png")
             return
 
     # Draw the emoji centered
@@ -68,7 +68,7 @@ def create_emoji_icon():
         # Fallback
         draw.text((14, 14), text, font=font, fill="white")
 
-    img.save("icon128.png")
+    img.save("../images/icon128.png")
     print("Emoji Icon generated: icon128.png")
 
 if __name__ == "__main__":

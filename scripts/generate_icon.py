@@ -59,7 +59,7 @@ def create_diamond_icon():
     draw.line([p_top_l, p_top_r], fill=(255, 255, 255, 200), width=2)
     draw.line([p_top_l, p_mid_l], fill=(255, 255, 255, 150), width=1)
     
-    img.save("icon128.png")
+    img.save("../images/icon128.png")
     print("Icon generated: icon128.png")
 
 if __name__ == "__main__":

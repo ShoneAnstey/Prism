@@ -217,7 +217,7 @@ function renderHero(title, description, feedUrl) {
 
     // Prism Brand Icon
     const brandIcon = document.createElement("img");
-    brandIcon.src = "icon128.png";
+    brandIcon.src = "images/icon128.png";
     brandIcon.className = "brand-icon";
     // Clickable brand link → home
     const brandLink = document.createElement("div");
@@ -857,7 +857,7 @@ function renderDashboard(subscriptions) {
         <div style="display:flex; align-items:center; justify-content:space-between; gap:20px; position:relative; z-index:2;">
             <div style="display:flex; flex-direction:column; gap:10px; flex-shrink:0;">
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <img src="icon128.png" class="brand-icon">
+                    <img src="images/icon128.png" class="brand-icon">
                     <h1 style="margin:0; font-size:1.3rem; color:var(--text-primary);"><span class="prism-text">Prism</span> Reader</h1>
                     <span style="opacity:0.6; font-size:0.8rem; color:var(--text-secondary);">${subscriptions.length} feed${subscriptions.length !== 1 ? 's' : ''}</span>
                 </div>
@@ -935,7 +935,7 @@ function renderDashboard(subscriptions) {
                 <div style="font-size:1.8rem;margin-bottom:8px;">⚡</div>
                 <h3 style="margin:0 0 4px;color:var(--text-primary);font-size:1.1rem;">Support Prism Reader</h3>
                 <p style="margin:0 0 16px;color:var(--text-secondary);font-size:0.85rem;">Scan with any Lightning wallet</p>
-                <img src="lightning-qr.png" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:8px;margin-bottom:16px;" alt="Lightning QR Code">
+                <img src="images/lightning-qr.png" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:8px;margin-bottom:16px;" alt="Lightning QR Code">
                 <div style="display:flex;align-items:center;gap:6px;background:var(--bg-color);border:1px solid var(--border-color);border-radius:8px;padding:8px 12px;margin-top:4px;">
                     <input readonly value="${lnurl}" style="flex:1;background:none;border:none;color:var(--text-secondary);font-size:0.65rem;font-family:monospace;outline:none;width:0;" id="lnurl-copy-field">
                     <button id="lnurl-copy-btn" style="background:var(--accent-color);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;white-space:nowrap;">Copy</button>
@@ -1731,7 +1731,7 @@ function renderDashboard(subscriptions) {
 
     // Customize Title with Link and Gradient
     h1.style.cursor = "pointer";
-    h1.innerHTML = `<img src="icon128.png" class="brand-icon"> <span class="prism-text">Prism</span> RSS`;
+    h1.innerHTML = `<img src="images/icon128.png" class="brand-icon"> <span class="prism-text">Prism</span> RSS`;
     h1.onclick = () => {
         window.location.href = "home.html";
     };
@@ -1860,7 +1860,7 @@ function renderDashboard(subscriptions) {
 
         if (isDashboard) {
             // DASHBOARD MODE
-            h1.innerHTML = `<img src="icon128.png" class="brand-icon"> <span class="prism-text">Prism</span> Reader`; // Keep branding
+            h1.innerHTML = `<img src="images/icon128.png" class="brand-icon"> <span class="prism-text">Prism</span> Reader`; // Keep branding
             const subs = await getSubscriptions();
             content.innerHTML = "";
             content.appendChild(renderDashboard(subs));
@@ -2004,7 +2004,7 @@ function renderDashboard(subscriptions) {
             }
         } else {
             // Generic View
-            h1.innerHTML = `<img src="icon128.png" class="brand-icon"> <span class="prism-text">Prism</span> XML`;
+            h1.innerHTML = `<img src="images/icon128.png" class="brand-icon"> <span class="prism-text">Prism</span> XML`;
             content.appendChild(renderGeneric(root));
         }
 
