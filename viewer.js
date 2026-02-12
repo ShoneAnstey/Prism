@@ -22,19 +22,31 @@ const sanitizeHtml = (html) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
 
+    const getUrlScheme = (value) => {
+        const m = String(value || "").trim().match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+        return m ? m[1].toLowerCase() : null;
+    };
+
     // Remove dangerous tags
     const badTags = ["script", "iframe", "object", "embed", "form", "base", "head", "meta", "link"];
     badTags.forEach(tag => {
         doc.querySelectorAll(tag).forEach(n => n.remove());
     });
 
-    // Remove dangerous attributes (on*, javascript:)
+    // Remove dangerous attributes (on*, scriptable schemes, non-http(s) URIs)
     doc.querySelectorAll("*").forEach(el => {
         const attrs = Array.from(el.attributes);
         for (const attr of attrs) {
-            if (attr.name.startsWith("on") ||
-                attr.value.trim().toLowerCase().startsWith("javascript:") ||
-                attr.value.trim().toLowerCase().startsWith("data:")) {
+            const attrName = attr.name.toLowerCase();
+            const attrValue = attr.value.trim();
+            const lowerValue = attrValue.toLowerCase();
+            const scheme = getUrlScheme(attrValue);
+
+            if (attrName.startsWith("on") ||
+                lowerValue.startsWith("javascript:") ||
+                lowerValue.startsWith("data:") ||
+                lowerValue.startsWith("vbscript:") ||
+                (scheme && !["http", "https", "mailto"].includes(scheme))) {
                 el.removeAttribute(attr.name);
             }
         }
@@ -42,6 +54,66 @@ const sanitizeHtml = (html) => {
 
     return doc.body.innerHTML;
 };
+
+function resolveSafeHttpUrl(maybeUrl, baseUrl = null) {
+    if (!maybeUrl) return null;
+    try {
+        const url = baseUrl ? new URL(maybeUrl, baseUrl) : new URL(maybeUrl);
+        if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+        return url.toString();
+    } catch {
+        return null;
+    }
+}
+
+function openExternalUrl(maybeUrl, baseUrl = null) {
+    const safeUrl = resolveSafeHttpUrl(maybeUrl, baseUrl);
+    if (!safeUrl) {
+        showToast("Blocked unsafe link");
+        return;
+    }
+    const w = window.open(safeUrl, "_blank", "noopener,noreferrer");
+    if (w) w.opener = null;
+}
+
+function setExternalAnchor(a, maybeUrl, baseUrl = null) {
+    const safeUrl = resolveSafeHttpUrl(maybeUrl, baseUrl);
+    if (!safeUrl) {
+        a.href = "#";
+        a.addEventListener("click", (e) => {
+            e.preventDefault();
+            showToast("Blocked unsafe link");
+        });
+        return false;
+    }
+    a.href = safeUrl;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    return true;
+}
+
+function appendTextWithLinks(container, text, baseUrl = null) {
+    const raw = String(text || "");
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    let last = 0;
+
+    raw.replace(urlRegex, (match, _g, offset) => {
+        if (offset > last) container.appendChild(document.createTextNode(raw.slice(last, offset)));
+
+        const a = document.createElement("a");
+        a.textContent = match;
+        if (!setExternalAnchor(a, match, baseUrl)) {
+            container.appendChild(document.createTextNode(match));
+        } else {
+            container.appendChild(a);
+        }
+
+        last = offset + match.length;
+        return match;
+    });
+
+    if (last < raw.length) container.appendChild(document.createTextNode(raw.slice(last)));
+}
 
 // Per-feed color palette (curated, high-contrast, accessible)
 const FEED_COLORS = [
@@ -82,10 +154,12 @@ function formatValue(text) {
     // Regex to detect URLs, but we must escape the text FIRST to prevent injection
     // Then wrap URLs. A simple approach is safer:
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return (text || "").replace(urlRegex, (url) => {
-        // Double-encode quotes to be safe in href, though escapeHtml handles it
-        const cleanUrl = escapeHtml(url);
-        return `<a href="${cleanUrl}" target="_blank">${cleanUrl}</a>`;
+    const safeText = escapeHtml(text || "");
+    return safeText.replace(urlRegex, (url) => {
+        const safeUrl = resolveSafeHttpUrl(url);
+        if (!safeUrl) return escapeHtml(url);
+        const href = escapeHtml(safeUrl);
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
     });
 }
 
@@ -195,7 +269,7 @@ function openArticleReader(article, articleList, index) {
 
     panel.querySelector("#reader-close").addEventListener("click", closeArticleReader);
     panel.querySelector("#reader-open").addEventListener("click", () => {
-        if (article.link) window.open(article.link, "_blank");
+        if (article.link) openExternalUrl(article.link, article.feedUrl);
     });
 
     // Use arrow functions to capture current state at click time
@@ -359,7 +433,17 @@ function renderGeneric(node, level = 0) {
 
         const row = document.createElement("div");
         row.className = "kv-row";
-        row.innerHTML = `<div class="kv-label">${formatLabel(node.nodeName)}</div><div class="kv-value">${formatValue(text)}</div>`;
+
+        const label = document.createElement("div");
+        label.className = "kv-label";
+        label.textContent = formatLabel(node.nodeName);
+
+        const value = document.createElement("div");
+        value.className = "kv-value";
+        appendTextWithLinks(value, text);
+
+        row.appendChild(label);
+        row.appendChild(value);
         return row;
     }
 
@@ -486,7 +570,12 @@ function renderSmartFeed(root, type, feedUrl) {
         // Meta
         const meta = document.createElement("div");
         meta.className = "card-meta";
-        meta.innerHTML = `<span>${article.date}</span><span>${timeString}</span>`;
+        const dateSpan = document.createElement("span");
+        dateSpan.textContent = article.date || "";
+        const timeSpan = document.createElement("span");
+        timeSpan.textContent = timeString;
+        meta.appendChild(dateSpan);
+        meta.appendChild(timeSpan);
         body.appendChild(meta);
 
         // Title
@@ -697,10 +786,15 @@ async function getSubscriptions() {
 }
 
 async function addSubscription(url, title, category = "Uncategorized") {
+    const safeUrl = resolveSafeHttpUrl(url);
+    if (!safeUrl) {
+        showToast("Invalid feed URL (http/https only)");
+        return false;
+    }
     const subs = await getSubscriptions();
-    if (!subs.find(s => s.url === url)) {
+    if (!subs.find(s => s.url === safeUrl)) {
         const color = FEED_COLORS[subs.length % FEED_COLORS.length];
-        subs.push({ url, title, addedAt: Date.now(), color, category });
+        subs.push({ url: safeUrl, title, addedAt: Date.now(), color, category });
         await chrome.storage.local.set({ subscriptions: subs });
         return true;
     }
@@ -1245,7 +1339,7 @@ function renderDashboard(subscriptions) {
         card.innerHTML = `
             <div class="card-body" style="opacity: 0.5;">
                 <div class="card-meta">LOADING...</div>
-                <h3 class="card-title">${sub.title}</h3>
+                <h3 class="card-title">${escapeHtml(sub.title)}</h3>
                 <div class="card-footer"></div>
             </div>
         `;
@@ -1478,7 +1572,7 @@ function renderDashboard(subscriptions) {
             if (categories.length > 1) {
                 const catHeader = document.createElement("h3");
                 catHeader.className = "category-header";
-                catHeader.innerHTML = `<span style="cursor:pointer;">📂 ${cat}</span> <span style="opacity:0.5; font-size:0.8rem;">${cardsByCategory[cat]?.length || 0} feeds</span>`;
+                catHeader.innerHTML = `<span style="cursor:pointer;">📂 ${escapeHtml(cat)}</span> <span style="opacity:0.5; font-size:0.8rem;">${cardsByCategory[cat]?.length || 0} feeds</span>`;
                 catHeader.style.cssText = "margin:16px 0 8px; font-size:1rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;";
                 catHeader.addEventListener("click", () => {
                     const catGrid = section.querySelector(".grid-container");
@@ -1547,9 +1641,8 @@ function renderDashboard(subscriptions) {
 
                 const readBtn = document.createElement("a");
                 readBtn.className = "read-btn";
-                readBtn.href = p.link;
                 readBtn.textContent = "Read →";
-                readBtn.target = "_blank";
+                setExternalAnchor(readBtn, p.link, p.feedUrl);
                 readBtn.style.fontSize = "0.8rem";
                 readBtn.addEventListener("click", () => trackArticleRead(p.feedTitle));
                 footer.appendChild(readBtn);
@@ -1627,7 +1720,7 @@ function renderDashboard(subscriptions) {
                 // Card click (not on buttons)
                 card.addEventListener("click", (e) => {
                     if (e.target.closest(".read-btn") || e.target.closest("button")) return;
-                    window.open(p.link, '_blank');
+                    openExternalUrl(p.link, p.feedUrl);
                     trackArticleRead(p.feedTitle);
                 });
                 mixList.appendChild(card);
@@ -1658,12 +1751,12 @@ function renderDashboard(subscriptions) {
                         <div class="card-body">
                             <div class="card-meta" style="margin-bottom:8px; display:flex; align-items:center; justify-content:space-between;">
                                 <span style="font-size:0.8rem; color:var(--accent-color);">
-                                    ${item.feedTitle || "Saved"}
+                                    ${escapeHtml(item.feedTitle || "Saved")}
                                 </span>
                                 <button class="rl-remove" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1rem;">✕</button>
                             </div>
-                            <h3 class="card-title">${item.title}</h3>
-                            <p class="card-desc">${(item.desc || "").replace(/<[^>]*>/g, '').substring(0, 60)}...</p>
+                            <h3 class="card-title">${escapeHtml(item.title || "")}</h3>
+                            <p class="card-desc">${escapeHtml((item.desc || "").replace(/<[^>]*>/g, '').substring(0, 60))}...</p>
                         </div>
                     `;
 
@@ -1673,7 +1766,7 @@ function renderDashboard(subscriptions) {
                             removeFromReadLater(item.link).then(() => card.remove());
                             return;
                         }
-                        window.open(item.link, '_blank');
+                        openExternalUrl(item.link);
                         trackArticleRead(item.feedTitle || "Saved");
                     });
 

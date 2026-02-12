@@ -3,8 +3,23 @@ async function getCurrentTab() {
   return tab;
 }
 
+function resolveSafeHttpUrl(maybeUrl) {
+  if (!maybeUrl) return null;
+  try {
+    const url = new URL(maybeUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function getXmlContent(url) {
-  const response = await fetch(url);
+  const safeUrl = resolveSafeHttpUrl(url);
+  if (!safeUrl) {
+    throw new Error("Unsupported URL scheme (http/https only)");
+  }
+  const response = await fetch(safeUrl);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
@@ -87,10 +102,12 @@ function buildTree(node) {
       if (feeds.length === 1) {
         // Single feed — open it directly
         status.textContent = "Opening feed...";
-        const xmlString = await getXmlContent(feeds[0].url);
+        const safeFeedUrl = resolveSafeHttpUrl(feeds[0].url);
+        if (!safeFeedUrl) throw new Error("Unsupported URL scheme (http/https only)");
+        const xmlString = await getXmlContent(safeFeedUrl);
         await chrome.storage.local.set({
           xmlData: xmlString,
-          currentFeedUrl: feeds[0].url
+          currentFeedUrl: safeFeedUrl
         });
         await chrome.tabs.create({ url: "reader.html" });
         window.close();
@@ -112,8 +129,10 @@ function buildTree(node) {
           status.textContent = "Loading feed...";
           list.style.display = "none";
           try {
-            const xmlString = await getXmlContent(feed.url);
-            await chrome.storage.local.set({ xmlData: xmlString, currentFeedUrl: feed.url });
+            const safeFeedUrl = resolveSafeHttpUrl(feed.url);
+            if (!safeFeedUrl) throw new Error("Unsupported URL scheme (http/https only)");
+            const xmlString = await getXmlContent(safeFeedUrl);
+            await chrome.storage.local.set({ xmlData: xmlString, currentFeedUrl: safeFeedUrl });
             await chrome.tabs.create({ url: "reader.html" });
             window.close();
           } catch (err) {
@@ -141,15 +160,18 @@ function buildTree(node) {
     // 2. Fallback: Try direct XML fetch (original behavior)
     status.textContent = "Checking content...";
     try {
-      const response = await fetch(tab.url, { method: 'HEAD' });
+      const safeTabUrl = resolveSafeHttpUrl(tab.url);
+      if (!safeTabUrl) throw new Error("Not an http(s) page");
+
+      const response = await fetch(safeTabUrl, { method: 'HEAD' });
       const contentType = response.headers.get("content-type") || "";
 
       if (contentType.includes("xml") || tab.url.endsWith(".xml") || tab.url.endsWith(".rss")) {
         status.textContent = "Fetching XML...";
-        const xmlString = await getXmlContent(tab.url);
+        const xmlString = await getXmlContent(safeTabUrl);
         await chrome.storage.local.set({
           xmlData: xmlString,
-          currentFeedUrl: tab.url
+          currentFeedUrl: safeTabUrl
         });
         await chrome.tabs.create({ url: "reader.html" });
       } else {

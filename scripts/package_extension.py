@@ -20,7 +20,23 @@ def main():
     print(f"📦 Packaging Prism Reader v{version}...")
 
     # Files/Dirs to exclude
-    EXCLUDE_DIRS = {'.git', 'scripts', 'docs', '.vscode', '__pycache__'}
+    # Keep the web store upload lean: never include virtualenvs, caches, or editor metadata.
+    EXCLUDE_DIRS = {
+        '.git',
+        'scripts',
+        'docs',
+        '.vscode',
+        '__pycache__',
+        '.venv',
+        'venv',
+        'env',
+        '.env',
+        '.pytest_cache',
+        '.mypy_cache',
+        '.ruff_cache',
+        '.idea',
+        'node_modules',
+    }
     EXCLUDE_FILES = {'.gitignore', '.DS_Store', 'desktop.ini', 'Thumbs.db', zip_filename}
     
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -30,6 +46,10 @@ def main():
             
             for file in files:
                 if file in EXCLUDE_FILES or file.endswith('.zip'):
+                    continue
+
+                # Skip compiled / cache files
+                if file.endswith(('.pyc', '.pyo')):
                     continue
                 
                 # Exclude store assets (screenshots, promo tiles) from the extension package

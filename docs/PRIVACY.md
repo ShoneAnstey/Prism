@@ -14,6 +14,7 @@ All data, including your subscribed feeds, "Read Later" bookmarks, and preferenc
 Prism only makes network requests to:
 -   **Fetch Feeds:** When you open the extension or background refresh triggers, Prism connects directly to the URLs of the RSS/Atom feeds you have explicitly subscribed to in order to download the latest content.
 -   **Favicons:** Prism may fetch favicons for your feeds using Google's Favicon service (`https://www.google.com/s2/favicons`) to display icons next to feed titles.
+-   **Translation (Optional):** If you click the Translate (🌐) button, Prism sends the selected text to MyMemory Translation (`https://api.mymemory.translated.net`) to retrieve an English translation. This only happens when you explicitly use the translation feature.
 
 ## 4. Analytics and Tracking
 Prism contains no analytics, tracking scripts, or telemetry. We do not know who uses the extension or what feeds they subscribe to.

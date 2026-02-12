@@ -8,9 +8,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "feedsDetected" && sender.tab) {
         const tabId = sender.tab.id;
         tabFeeds[tabId] = {
-            feeds: message.feeds,
-            pageUrl: message.pageUrl,
-            pageTitle: message.pageTitle
+            feeds: message.feeds
         };
 
         // Set badge with feed count
@@ -106,7 +104,17 @@ async function checkForNewArticles() {
 
         for (const sub of subs) {
             try {
-                const response = await fetch(sub.url, { signal: AbortSignal.timeout(10000) });
+                let safeUrl = null;
+                try {
+                    const u = new URL(sub.url);
+                    if (u.protocol === "http:" || u.protocol === "https:") safeUrl = u.toString();
+                } catch { }
+                if (!safeUrl) {
+                    console.log(`Skipping unsafe feed URL: ${sub.url}`);
+                    continue;
+                }
+
+                const response = await fetch(safeUrl, { signal: AbortSignal.timeout(10000) });
                 const text = await response.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(text, "text/xml");
@@ -116,11 +124,11 @@ async function checkForNewArticles() {
                     i.querySelector("title")?.textContent || ""
                 ).filter(Boolean);
 
-                const previousTitles = lastChecked[sub.url] || [];
+                const previousTitles = lastChecked[safeUrl] || [];
                 const newArticles = currentTitles.filter(t => !previousTitles.includes(t));
 
                 totalNew += newArticles.length;
-                updatedChecked[sub.url] = currentTitles.slice(0, 20); // Store last 20 titles
+                updatedChecked[safeUrl] = currentTitles.slice(0, 20); // Store last 20 titles
             } catch (e) {
                 console.log(`Feed check failed for ${sub.url}:`, e.message);
             }
