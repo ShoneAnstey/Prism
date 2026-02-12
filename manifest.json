@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prism XML/RSS Reader",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Beautiful RSS/XML reader with feed discovery, subscriptions, and smart reading features.",
   "permissions": [
     "activeTab",

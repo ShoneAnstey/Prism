@@ -2,9 +2,46 @@
  * viewer.js
  * Logic for the full-screen XML viewer.
  * Transforms raw XML into a Smart Content Browser.
+ * Transforms raw XML into a Smart Content Browser.
  */
 
-// --- 1. UTILITIES ---
+// --- SECURITY HELPERS ---
+
+// Global HTML Escaper (prevents XSS in titles/attributes)
+const escapeHtml = (unsafe) => {
+    return (unsafe || "").replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
+// Basic HTML Sanitizer for Article Content (removes scripts/handlers)
+const sanitizeHtml = (html) => {
+    if (!html) return "";
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    // Remove dangerous tags
+    const badTags = ["script", "iframe", "object", "embed", "form", "base", "head", "meta", "link"];
+    badTags.forEach(tag => {
+        doc.querySelectorAll(tag).forEach(n => n.remove());
+    });
+
+    // Remove dangerous attributes (on*, javascript:)
+    doc.querySelectorAll("*").forEach(el => {
+        const attrs = Array.from(el.attributes);
+        for (const attr of attrs) {
+            if (attr.name.startsWith("on") ||
+                attr.value.trim().toLowerCase().startsWith("javascript:") ||
+                attr.value.trim().toLowerCase().startsWith("data:")) {
+                el.removeAttribute(attr.name);
+            }
+        }
+    });
+
+    return doc.body.innerHTML;
+};
 
 // Per-feed color palette (curated, high-contrast, accessible)
 const FEED_COLORS = [
@@ -42,11 +79,14 @@ function formatLabel(tagName) {
 }
 
 function formatValue(text) {
+    // Regex to detect URLs, but we must escape the text FIRST to prevent injection
+    // Then wrap URLs. A simple approach is safer:
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    if (urlRegex.test(text)) {
-        return text.replace(urlRegex, '<a href="$1" target="_blank">$1</a>');
-    }
-    return text;
+    return (text || "").replace(urlRegex, (url) => {
+        // Double-encode quotes to be safe in href, though escapeHtml handles it
+        const cleanUrl = escapeHtml(url);
+        return `<a href="${cleanUrl}" target="_blank">${cleanUrl}</a>`;
+    });
 }
 
 // Extract image from HTML string (found in description/content)
@@ -132,11 +172,11 @@ function openArticleReader(article, articleList, index) {
         </div>
         <div class="article-reader-body">
             <div class="reader-meta">
-                ${article.feedTitle ? `<span>${article.feedTitle}</span>` : ""}
-                ${article.date ? `<span>• ${article.date}</span>` : ""}
+                ${article.feedTitle ? `<span>${escapeHtml(article.feedTitle)}</span>` : ""}
+                ${article.date ? `<span>• ${escapeHtml(article.date)}</span>` : ""}
             </div>
-            <h1 class="reader-title">${article.title || "Untitled"}</h1>
-            <div class="reader-content">${article.content || "<p>No content available for this article. Click 'Open' to view the full article.</p>"}</div>
+            <h1 class="reader-title">${escapeHtml(article.title || "Untitled")}</h1>
+            <div class="reader-content">${sanitizeHtml(article.content) || "<p>No content available for this article. Click 'Open' to view the full article.</p>"}</div>
         </div>
     `;
 
@@ -409,10 +449,10 @@ function renderSmartFeed(root, type, feedUrl) {
             }
         }
 
-        // Clean text summary
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = itemDesc;
-        const textSummary = tempDiv.textContent.substring(0, 150) + (tempDiv.textContent.length > 150 ? "..." : "");
+        // Clean text summary (Safe DOM Parsing)
+        const tempDoc = new DOMParser().parseFromString(itemDesc, "text/html");
+        const rawText = tempDoc.body.textContent || "";
+        const textSummary = rawText.substring(0, 150) + (rawText.length > 150 ? "..." : "");
 
         allArticles.push({
             title: itemTitle,
@@ -1177,7 +1217,7 @@ function renderDashboard(subscriptions) {
     function addKeywordChip(container, keyword) {
         const chip = document.createElement("span");
         chip.className = "keyword-chip";
-        chip.innerHTML = `${keyword} <span class="keyword-remove">&times;</span>`;
+        chip.innerHTML = `${escapeHtml(keyword)} <span class="keyword-remove">&times;</span>`;
         chip.querySelector(".keyword-remove").addEventListener("click", async () => {
             await removeKeyword(keyword);
             chip.remove();
@@ -1261,18 +1301,20 @@ function renderDashboard(subscriptions) {
                 // Try to find an image
                 let imgUrl = extractImageFromItem(item);
 
+                // Helpers are now global, removed local definition
+
                 // Render Live Card
                 card.innerHTML = `
                     <div class="card-body">
                         <div class="card-meta">
                             <img src="https://www.google.com/s2/favicons?domain=${new URL(sub.url).hostname}&sz=64" 
                                  style="width:20px; height:20px; margin-right:8px; vertical-align:text-bottom; border-radius:4px;">
-                            ${sub.title}
+                            ${escapeHtml(sub.title)}
                         </div>
-                        <h3 class="card-title card-limit-lines">${title}</h3>
+                        <h3 class="card-title card-limit-lines">${escapeHtml(title)}</h3>
                         <div class="card-footer" style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-size:0.8rem; opacity:0.7;">${healthBadge} ${dateDisplay}</span>
-                            <button class="read-btn remove-btn" data-url="${sub.url}">Unsubscribe</button>
+                            <span style="font-size:0.8rem; opacity:0.7;">${healthBadge} ${escapeHtml(dateDisplay)}</span>
+                            <button class="read-btn remove-btn" data-url="${escapeHtml(sub.url)}">Unsubscribe</button>
                         </div>
                     </div>
                 `;
@@ -1283,6 +1325,8 @@ function renderDashboard(subscriptions) {
             }
 
         } catch (e) {
+            // Helpers are now global, removed local definition
+
             // Fallback to simple card
             card.innerHTML = `
                 <div class="card-body">
@@ -1290,11 +1334,11 @@ function renderDashboard(subscriptions) {
                     <h3 class="card-title">
                       <img src="https://www.google.com/s2/favicons?domain=${new URL(sub.url).hostname}&sz=64" 
                            style="width:20px; height:20px; margin-right:8px; vertical-align:middle; border-radius:4px;">
-                      ${sub.title}
+                      ${escapeHtml(sub.title)}
                     </h3>
-                    <p class="card-desc" style="flex:1; overflow:hidden;">${sub.url}</p>
+                    <p class="card-desc" style="flex:1; overflow:hidden;">${escapeHtml(sub.url)}</p>
                     <div class="card-footer">
-                        <button class="read-btn remove-btn" data-url="${sub.url}">Unsubscribe</button>
+                        <button class="read-btn remove-btn" data-url="${escapeHtml(sub.url)}">Unsubscribe</button>
                     </div>
                 </div>
             `;
@@ -1483,11 +1527,11 @@ function renderDashboard(subscriptions) {
                         <div class="card-meta" style="margin-bottom:8px; display:flex; align-items:center; font-size:0.8rem; color:var(--accent-color);">
                            <img src="https://www.google.com/s2/favicons?domain=${new URL(p.feedUrl).hostname}&sz=64" 
                                 style="width:20px; height:20px; margin-right:6px; border-radius:4px;">
-                           ${p.feedTitle}
+                           ${escapeHtml(p.feedTitle)}
                         </div>
-                        <h3 class="card-title">${p.title}</h3>
+                        <h3 class="card-title">${escapeHtml(p.title)}</h3>
                         <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-                            <p class="card-desc" style="margin-bottom:0;">${p.desc.replace(/<[^>]*>/g, '').substring(0, 60)}...</p>
+                            <p class="card-desc" style="margin-bottom:0;">${escapeHtml(p.desc.replace(/<[^>]*>/g, '').substring(0, 60))}...</p>
                             <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; margin-left:8px;">
                                 ${p.date ? new Date(p.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
                             </span>
