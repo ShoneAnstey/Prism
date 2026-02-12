@@ -20,7 +20,7 @@ def main():
     print(f"📦 Packaging Prism Reader v{version}...")
 
     # Files/Dirs to exclude
-    # Keep the web store upload lean: never include virtualenvs, caches, or editor metadata.
+    # Keep the web store upload lean: never include tooling, caches, or editor metadata.
     EXCLUDE_DIRS = {
         '.git',
         'scripts',
@@ -37,7 +37,22 @@ def main():
         '.idea',
         'node_modules',
     }
-    EXCLUDE_FILES = {'.gitignore', '.DS_Store', 'desktop.ini', 'Thumbs.db', zip_filename}
+    # Dev-only Node tooling files are kept in the repo but must not be shipped.
+    EXCLUDE_FILES = {
+        '.gitignore',
+        '.DS_Store',
+        'desktop.ini',
+        'Thumbs.db',
+        zip_filename,
+        'package.json',
+        'package-lock.json',
+        'yarn.lock',
+        'pnpm-lock.yaml',
+        'eslint.config.cjs',
+        'eslint.security.config.cjs',
+        '.npmrc',
+        '.nvmrc',
+    }
     
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(root_dir):
