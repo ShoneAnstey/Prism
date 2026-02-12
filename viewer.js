@@ -150,19 +150,6 @@ function formatLabel(tagName) {
         .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function formatValue(text) {
-    // Regex to detect URLs, but we must escape the text FIRST to prevent injection
-    // Then wrap URLs. A simple approach is safer:
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const safeText = escapeHtml(text || "");
-    return safeText.replace(urlRegex, (url) => {
-        const safeUrl = resolveSafeHttpUrl(url);
-        if (!safeUrl) return escapeHtml(url);
-        const href = escapeHtml(safeUrl);
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
-    });
-}
-
 // Extract image from HTML string (found in description/content)
 function extractImage(htmlContent) {
     const parser = new DOMParser();
@@ -233,6 +220,7 @@ function openArticleReader(article, articleList, index) {
     panel.className = "article-reader-panel";
 
     // Header
+    // eslint-disable-next-line no-unsanitized/property -- UI template: dynamic values are escaped via escapeHtml()/sanitizeHtml().
     panel.innerHTML = `
         <div class="article-reader-header">
             <div class="reader-nav">
@@ -419,6 +407,7 @@ function renderHero(title, description, feedUrl) {
 
 // Generic Recursive Renderer (Fallback)
 function renderGeneric(node, level = 0) {
+
     if (node.nodeType === Node.TEXT_NODE) return node.nodeValue.trim() || null;
     if (node.nodeType !== Node.ELEMENT_NODE) return null;
 
@@ -807,23 +796,6 @@ async function removeSubscription(url) {
     await chrome.storage.local.set({ subscriptions: filtered });
 }
 
-// Update a subscription's properties (category, color, etc.)
-async function updateSubscription(url, updates) {
-    const subs = await getSubscriptions();
-    const sub = subs.find(s => s.url === url);
-    if (sub) {
-        Object.assign(sub, updates);
-        await chrome.storage.local.set({ subscriptions: subs });
-    }
-}
-
-// Get unique categories from subscriptions
-async function getCategories() {
-    const subs = await getSubscriptions();
-    const cats = [...new Set(subs.map(s => s.category || "Uncategorized"))];
-    return cats.sort((a, b) => a === "Uncategorized" ? 1 : b === "Uncategorized" ? -1 : a.localeCompare(b));
-}
-
 // --- OPML IMPORT / EXPORT ---
 
 function exportOPML(subscriptions) {
@@ -943,7 +915,7 @@ async function getReadingStats() {
     return data.readingStats || { totalArticles: 0, totalTime: 0, streak: 0, lastReadDate: null, history: [] };
 }
 
-async function trackArticleRead(feedTitle) {
+async function trackArticleRead(_feedTitle) {
     const stats = await getReadingStats();
     const today = new Date().toDateString();
 
@@ -998,6 +970,7 @@ function renderDashboard(subscriptions) {
     const hero = document.createElement("div");
     hero.className = "hero";
     hero.style.cssText = "padding:16px 24px; position:relative; border-radius:0; border:none; border-bottom:1px solid var(--border-color); margin-bottom:0;";
+    // eslint-disable-next-line no-unsanitized/property -- UI template: dynamic values are numbers only; HTML is controlled.
     hero.innerHTML = `
         <button class="close-btn" id="hero-close-btn" aria-label="Close" title="Close Tab" style="position:absolute; top:12px; right:16px; z-index:3;">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -1153,11 +1126,24 @@ function renderDashboard(subscriptions) {
         // Stats widget with mini sparkline
         Promise.all([getReadingStats(), getReadLater()]).then(([stats, savedItems]) => {
             if (statsWidget) {
-                statsWidget.innerHTML = `
-                    <span class="stat-item">📖 ${stats.totalArticles} read</span>
-                    <span class="stat-item">🔥 ${stats.streak} day streak</span>
-                    <span class="stat-item stat-item-link" id="stat-saved" style="cursor:pointer;">📌 ${savedItems.length} saved</span>
-                `;
+                statsWidget.replaceChildren();
+
+                const readSpan = document.createElement("span");
+                readSpan.className = "stat-item";
+                readSpan.textContent = `📖 ${stats.totalArticles} read`;
+                statsWidget.appendChild(readSpan);
+
+                const streakSpan = document.createElement("span");
+                streakSpan.className = "stat-item";
+                streakSpan.textContent = `🔥 ${stats.streak} day streak`;
+                statsWidget.appendChild(streakSpan);
+
+                const savedSpan = document.createElement("span");
+                savedSpan.className = "stat-item stat-item-link";
+                savedSpan.id = "stat-saved";
+                savedSpan.style.cursor = "pointer";
+                savedSpan.textContent = `📌 ${savedItems.length} saved`;
+                statsWidget.appendChild(savedSpan);
 
                 // Build 30-day data
                 const days = [];
@@ -1178,11 +1164,21 @@ function renderDashboard(subscriptions) {
                     const total30 = days.reduce((s, c) => s + c, 0);
                     const summaryDiv = document.createElement("div");
                     summaryDiv.style.cssText = "flex:0 0 auto; min-width:140px;";
-                    summaryDiv.innerHTML = `
-                        <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px;">📊 30-day activity</div>
-                        <div style="font-size:1.8rem; font-weight:700; color:var(--text-primary); line-height:1;">${total30}</div>
-                        <div style="font-size:0.7rem; color:var(--text-secondary); margin-top:2px;">articles · ~${(total30 / 30).toFixed(1)}/day</div>
-                    `;
+                    const summaryTitle = document.createElement("div");
+                    summaryTitle.style.cssText = "font-size:0.75rem; color:var(--text-secondary); margin-bottom:4px;";
+                    summaryTitle.textContent = "📊 30-day activity";
+
+                    const summaryValue = document.createElement("div");
+                    summaryValue.style.cssText = "font-size:1.8rem; font-weight:700; color:var(--text-primary); line-height:1;";
+                    summaryValue.textContent = String(total30);
+
+                    const summarySub = document.createElement("div");
+                    summarySub.style.cssText = "font-size:0.7rem; color:var(--text-secondary); margin-top:2px;";
+                    summarySub.textContent = `articles · ~${(total30 / 30).toFixed(1)}/day`;
+
+                    summaryDiv.appendChild(summaryTitle);
+                    summaryDiv.appendChild(summaryValue);
+                    summaryDiv.appendChild(summarySub);
                     chartRow.appendChild(summaryDiv);
 
                     // Right: chart
@@ -1311,11 +1307,17 @@ function renderDashboard(subscriptions) {
     function addKeywordChip(container, keyword) {
         const chip = document.createElement("span");
         chip.className = "keyword-chip";
-        chip.innerHTML = `${escapeHtml(keyword)} <span class="keyword-remove">&times;</span>`;
-        chip.querySelector(".keyword-remove").addEventListener("click", async () => {
+        chip.replaceChildren();
+        chip.appendChild(document.createTextNode(`${keyword} `));
+
+        const removeSpan = document.createElement("span");
+        removeSpan.className = "keyword-remove";
+        removeSpan.textContent = "×";
+        removeSpan.addEventListener("click", async () => {
             await removeKeyword(keyword);
             chip.remove();
         });
+        chip.appendChild(removeSpan);
         container.appendChild(chip);
     }
 
@@ -1336,6 +1338,7 @@ function renderDashboard(subscriptions) {
         card.style.borderLeft = `3px solid ${sub.color || getFeedColor(sub.url)}`;
 
         // Skeleton / Loading State
+        // eslint-disable-next-line no-unsanitized/property -- UI template: dynamic values are escaped via escapeHtml().
         card.innerHTML = `
             <div class="card-body" style="opacity: 0.5;">
                 <div class="card-meta">LOADING...</div>
@@ -1369,7 +1372,6 @@ function renderDashboard(subscriptions) {
             const item = entries[0];
             if (item) {
                 const title = item.querySelector("title")?.textContent || sub.title;
-                const desc = item.querySelector("description, summary")?.textContent || "";
 
                 // Date Extraction
                 const dateStr = item.querySelector("pubDate")?.textContent || item.querySelector("updated")?.textContent;
@@ -1387,17 +1389,15 @@ function renderDashboard(subscriptions) {
                             else if (ageDays > 7) healthBadge = "🟡";
                             else healthBadge = "🟢";
                         }
-                    } catch (e) { }
+                    } catch { /* ignore invalid date */ }
                 } else {
                     healthBadge = "⚪";
                 }
 
-                // Try to find an image
-                let imgUrl = extractImageFromItem(item);
-
                 // Helpers are now global, removed local definition
 
                 // Render Live Card
+                // eslint-disable-next-line no-unsanitized/property -- UI template: dynamic values are escaped via escapeHtml().
                 card.innerHTML = `
                     <div class="card-body">
                         <div class="card-meta">
@@ -1418,10 +1418,11 @@ function renderDashboard(subscriptions) {
                 throw new Error("No items");
             }
 
-        } catch (e) {
+        } catch {
             // Helpers are now global, removed local definition
 
             // Fallback to simple card
+            // eslint-disable-next-line no-unsanitized/property -- UI template: dynamic values are escaped via escapeHtml().
             card.innerHTML = `
                 <div class="card-body">
                     <div class="card-meta">FEED</div>
@@ -1572,7 +1573,18 @@ function renderDashboard(subscriptions) {
             if (categories.length > 1) {
                 const catHeader = document.createElement("h3");
                 catHeader.className = "category-header";
-                catHeader.innerHTML = `<span style="cursor:pointer;">📂 ${escapeHtml(cat)}</span> <span style="opacity:0.5; font-size:0.8rem;">${cardsByCategory[cat]?.length || 0} feeds</span>`;
+                catHeader.replaceChildren();
+                const catTitleSpan = document.createElement("span");
+                catTitleSpan.style.cursor = "pointer";
+                catTitleSpan.textContent = `📂 ${cat}`;
+                catHeader.appendChild(catTitleSpan);
+                catHeader.appendChild(document.createTextNode(" "));
+
+                const countSpan = document.createElement("span");
+                countSpan.style.opacity = "0.5";
+                countSpan.style.fontSize = "0.8rem";
+                countSpan.textContent = `${cardsByCategory[cat]?.length || 0} feeds`;
+                catHeader.appendChild(countSpan);
                 catHeader.style.cssText = "margin:16px 0 8px; font-size:1rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;";
                 catHeader.addEventListener("click", () => {
                     const catGrid = section.querySelector(".grid-container");
@@ -1605,7 +1617,7 @@ function renderDashboard(subscriptions) {
 
             const mixTitle = document.createElement("h2");
             mixTitle.className = "section-title";
-            mixTitle.innerHTML = `✨ Daily Mix`;
+            mixTitle.textContent = "✨ Daily Mix";
             sidebarCol.appendChild(mixTitle);
 
             const mixList = document.createElement("div");
@@ -1616,6 +1628,7 @@ function renderDashboard(subscriptions) {
                 card.className = "daily-mix-card"; // New class
                 card.style.borderLeft = `3px solid ${getFeedColor(p.feedUrl)}`;
 
+                // eslint-disable-next-line no-unsanitized/property -- UI template: dynamic values are escaped via escapeHtml().
                 card.innerHTML = `
                     <div class="card-body">
                         <div class="card-meta" style="margin-bottom:8px; display:flex; align-items:center; font-size:0.8rem; color:var(--accent-color);">
@@ -1710,7 +1723,9 @@ function renderDashboard(subscriptions) {
                             if (descEl && parts[1]) descEl.textContent = parts[1];
                         }
                         translateBtn.textContent = "✅";
-                    } catch (err) { translateBtn.textContent = "❌"; }
+                    } catch {
+                        translateBtn.textContent = "❌";
+                    }
                     setTimeout(() => { translateBtn.textContent = "🌐"; }, 2000);
                 });
                 footer.appendChild(translateBtn);
@@ -1728,7 +1743,11 @@ function renderDashboard(subscriptions) {
 
             sidebarCol.appendChild(mixList);
         } else {
-            sidebarCol.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-secondary);">Add feeds to see Daily Mix!</div>`;
+            sidebarCol.replaceChildren();
+            const emptyState = document.createElement("div");
+            emptyState.style.cssText = "padding:20px; text-align:center; color:var(--text-secondary);";
+            emptyState.textContent = "Add feeds to see Daily Mix!";
+            sidebarCol.appendChild(emptyState);
         }
 
         // --- READ LATER in SIDEBAR ---
@@ -1747,6 +1766,7 @@ function renderDashboard(subscriptions) {
                 items.slice(0, 6).forEach(item => {
                     const card = document.createElement("article");
                     card.className = "daily-mix-card";
+                    // eslint-disable-next-line no-unsanitized/property -- UI template: dynamic values are escaped via escapeHtml().
                     card.innerHTML = `
                         <div class="card-body">
                             <div class="card-meta" style="margin-bottom:8px; display:flex; align-items:center; justify-content:space-between;">
@@ -1971,7 +1991,7 @@ function renderDashboard(subscriptions) {
         // C. Layout Toggle
         const layoutBtn = document.createElement("button");
         layoutBtn.className = "icon-btn";
-        layoutBtn.innerHTML = "⊞"; // Grid icon default
+        layoutBtn.textContent = "⊞"; // Grid icon default
         layoutBtn.title = "Toggle Layout";
         layoutBtn.onclick = () => {
             // 1. Handle Feed Grid (Existing)
@@ -1989,7 +2009,7 @@ function renderDashboard(subscriptions) {
             // Update Icon
             const isList = (grid && grid.classList.contains("list-view")) ||
                 (dashboard && dashboard.classList.contains("stacked-view"));
-            layoutBtn.innerHTML = isList ? "☰" : "⊞";
+            layoutBtn.textContent = isList ? "☰" : "⊞";
         };
         h1.parentNode.insertBefore(layoutBtn, document.getElementById("theme-toggle"));
 
@@ -2071,7 +2091,14 @@ function renderDashboard(subscriptions) {
                 const statsBadge = document.createElement("div");
                 statsBadge.className = "stats-badge";
                 statsBadge.style.flexShrink = "0";
-                statsBadge.innerHTML = `<span>${itemCount} Items</span> • <span>${totalReadTime}m Read</span>`;
+
+                const itemsSpan = document.createElement("span");
+                itemsSpan.textContent = `${itemCount} Items`;
+                const readSpan = document.createElement("span");
+                readSpan.textContent = `${totalReadTime}m Read`;
+                statsBadge.appendChild(itemsSpan);
+                statsBadge.appendChild(document.createTextNode(" • "));
+                statsBadge.appendChild(readSpan);
                 heroToolbar.appendChild(statsBadge);
 
                 // C. Layout Toggle

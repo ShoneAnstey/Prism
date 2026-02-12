@@ -26,53 +26,6 @@ async function getXmlContent(url) {
   return await response.text();
 }
 
-function parseXml(xmlString) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlString, "application/xml");
-  const parserError = doc.getElementsByTagName("parsererror")[0];
-  if (parserError) {
-    throw new Error(parserError.textContent || "XML parse error");
-  }
-  return doc;
-}
-
-function buildTree(node) {
-  if (node.nodeType === Node.TEXT_NODE) {
-    const text = node.nodeValue.trim();
-    if (!text) return null;
-    const span = document.createElement("span");
-    span.className = "xml-text";
-    span.textContent = text;
-    return span;
-  }
-
-  if (node.nodeType !== Node.ELEMENT_NODE) return null;
-
-  const container = document.createElement("div");
-  container.className = "xml-node";
-
-  const header = document.createElement("div");
-  header.className = "xml-node-header";
-  header.textContent = `<${node.nodeName}>`;
-  container.appendChild(header);
-
-  const childrenWrapper = document.createElement("div");
-  childrenWrapper.className = "xml-children";
-
-  for (const child of node.childNodes) {
-    const childView = buildTree(child);
-    if (childView) childrenWrapper.appendChild(childView);
-  }
-
-  container.appendChild(childrenWrapper);
-
-  header.addEventListener("click", () => {
-    childrenWrapper.classList.toggle("collapsed");
-  });
-
-  return container;
-}
-
 (async () => {
   const status = document.getElementById("status");
 

@@ -125,6 +125,25 @@ prism-reader/
 
 ---
 
+## 🧹 Development / Linting
+
+This repo uses ESLint (flat config).
+
+```bash
+npm install
+```
+
+- Standard lint (strict, no warnings allowed):
+  ```bash
+  npm run lint
+  ```
+- Security lint (strict, focuses on `eslint-plugin-no-unsanitized` warnings):
+  ```bash
+  npm run lint:security
+  ```
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Feel free to:

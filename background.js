@@ -108,7 +108,7 @@ async function checkForNewArticles() {
                 try {
                     const u = new URL(sub.url);
                     if (u.protocol === "http:" || u.protocol === "https:") safeUrl = u.toString();
-                } catch { }
+                } catch { /* ignore invalid URL */ }
                 if (!safeUrl) {
                     console.log(`Skipping unsafe feed URL: ${sub.url}`);
                     continue;
