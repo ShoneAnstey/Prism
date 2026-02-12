@@ -1,35 +1,23 @@
-# Privacy Policy — Prism Reader
+# Privacy Policy for Prism RSS Reader
 
-**Last updated: February 11, 2026**
+**Last Updated:** February 11, 2026
 
-## Overview
-Prism Reader is a browser extension that helps you read RSS, Atom, and XML feeds. Your privacy is important to us.
+Prism RSS Reader ("Prism") is an open-source browser extension designed to respect your privacy. This policy describes how Prism handles your data.
 
-## Data Collection
-Prism Reader does **not** collect, store, or transmit any personal data to external servers.
+## 1. No Data Collection
+Prism does not collect, store, share, or transmit any personal information, browsing history, or feed data to us or any third parties.
 
-## What is stored locally
-All data is stored **locally on your device** using Chrome's Storage API:
-- Feed subscriptions (URLs and titles)
-- Reading statistics (article count, streak, history)
-- User preferences (theme, view mode)
-- OPML backups of your subscriptions
-- Read Later queue
-- Keyword watchlist
+## 2. Local Storage
+All data, including your subscribed feeds, "Read Later" bookmarks, and preferences, are stored locally on your device using the browser's `chrome.storage.local` API. This data never leaves your browser.
 
-## Network requests
-Prism Reader makes network requests **only** to:
-- Fetch RSS/Atom/XML feed content from URLs **you** subscribe to or visit
-- These requests go directly to the feed source — no intermediary servers are involved
+## 3. External Requests
+Prism only makes network requests to:
+-   **Fetch Feeds:** When you open the extension or background refresh triggers, Prism connects directly to the URLs of the RSS/Atom feeds you have explicitly subscribed to in order to download the latest content.
+-   **Favicons:** Prism may fetch favicons for your feeds using Google's Favicon service (`https://www.google.com/s2/favicons`) to display icons next to feed titles.
 
-## Third-party services
-Prism Reader does **not** use any third-party analytics, tracking, or advertising services.
+## 4. Analytics and Tracking
+Prism contains no analytics, tracking scripts, or telemetry. We do not know who uses the extension or what feeds they subscribe to.
 
-## Data sharing
-Your data is **never** shared with third parties. Period.
-
-## Changes
-If this policy changes, we will update this document with a new date.
-
-## Contact
-For questions about this privacy policy, please open an issue on our [GitHub repository](https://github.com/YOUR_USERNAME/prism-reader/issues).
+## 5. Contact
+If you have questions about this policy, please open an issue on our GitHub repository:
+https://github.com/ShoneAnstey/Prism

@@ -150,20 +150,32 @@ function openArticleReader(article, articleList, index) {
     });
 
     // Wire buttons
+    const prevBtn = panel.querySelector("#reader-prev");
+    const nextBtn = panel.querySelector("#reader-next");
+
     panel.querySelector("#reader-close").addEventListener("click", closeArticleReader);
     panel.querySelector("#reader-open").addEventListener("click", () => {
         if (article.link) window.open(article.link, "_blank");
     });
-    panel.querySelector("#reader-prev").addEventListener("click", () => navigateArticle(-1));
-    panel.querySelector("#reader-next").addEventListener("click", () => navigateArticle(1));
+
+    // Use arrow functions to capture current state at click time
+    prevBtn.addEventListener("click", () => navigateArticle(-1));
+    nextBtn.addEventListener("click", () => navigateArticle(1));
 
     // Update nav button states
-    const prevBtn = panel.querySelector("#reader-prev");
-    const nextBtn = panel.querySelector("#reader-next");
-    if (_currentArticleIndex <= 0) prevBtn.style.opacity = "0.3";
-    if (_currentArticleIndex >= _articleList.length - 1) nextBtn.style.opacity = "0.3";
+    if (_currentArticleIndex <= 0) {
+        prevBtn.style.opacity = "0.3";
+        prevBtn.disabled = true;
+    }
+    if (_currentArticleIndex >= _articleList.length - 1) {
+        nextBtn.style.opacity = "0.3";
+        nextBtn.disabled = true;
+    }
 
     // Keyboard listener
+    // Remove old one first to prevent duplicates if cleanup failed
+    if (document._readerKeyHandler) document.removeEventListener("keydown", document._readerKeyHandler);
+
     document._readerKeyHandler = (e) => {
         if (e.key === "Escape") closeArticleReader();
         else if (e.key === "ArrowLeft") navigateArticle(-1);
@@ -173,6 +185,10 @@ function openArticleReader(article, articleList, index) {
 
     // Track read
     if (article.feedTitle) trackArticleRead(article.feedTitle);
+
+    // Scroll to top of body
+    const bodyEl = panel.querySelector(".article-reader-body");
+    if (bodyEl) bodyEl.scrollTop = 0;
 }
 
 function closeArticleReader() {
@@ -189,7 +205,9 @@ function closeArticleReader() {
 function navigateArticle(direction) {
     const newIndex = _currentArticleIndex + direction;
     if (newIndex >= 0 && newIndex < _articleList.length) {
-        openArticleReader(_articleList[newIndex], _articleList, newIndex);
+        // Update index global BEFORE opening (though open sets it too)
+        _currentArticleIndex = newIndex;
+        openArticleReader(_articleList[newIndex], null, newIndex);
     }
 }
 
@@ -355,33 +373,29 @@ function renderSmartFeed(root, type, feedUrl) {
     // C. Process Items
     const items = type === "rss" ? root.querySelectorAll("item") : root.querySelectorAll("entry");
 
-    items.forEach((item, index) => {
-        const card = document.createElement("article");
-        card.className = "news-card";
-        card.style.borderLeft = `3px solid ${getFeedColor(feedUrl)}`;
+    // Pre-process all items to build the article list for navigation
+    const allArticles = [];
 
-        // 1. Data Extraction
+    // First pass: Extract data
+    items.forEach((item) => {
         const itemTitle = item.querySelector("title")?.textContent || "No Title";
         const itemLink = item.querySelector("link")?.textContent || item.querySelector("link")?.getAttribute("href");
         const itemDate = item.querySelector("pubDate")?.textContent || item.querySelector("updated")?.textContent || item.querySelector("date")?.textContent;
 
-        // Full content (prefer content:encoded for RSS, content for Atom)
         let fullContent = "";
         const contentEncoded = item.getElementsByTagNameNS("*", "encoded");
         if (contentEncoded.length > 0) fullContent = contentEncoded[0].textContent || "";
         if (!fullContent) fullContent = item.querySelector("content")?.textContent || "";
 
-        // Description for summary & image extraction
         let itemDesc = item.querySelector("description")?.textContent || item.querySelector("summary")?.textContent || fullContent || "";
         let itemImage = extractImage(itemDesc);
 
-        // Try <enclosure> for image if html extraction failed
+        // Try <enclosure> for image
         if (!itemImage) {
             const enclosure = item.querySelector("enclosure");
             if (enclosure && enclosure.getAttribute("type")?.startsWith("image")) {
                 itemImage = enclosure.getAttribute("url");
             }
-            // Media RSS extension support
             const mediaContent = item.getElementsByTagNameNS("*", "content");
             for (let i = 0; i < mediaContent.length; i++) {
                 if (mediaContent[i].getAttribute("medium") === "image") {
@@ -393,45 +407,62 @@ function renderSmartFeed(root, type, feedUrl) {
             if (!itemImage && mediaThumbnail.length > 0) {
                 itemImage = mediaThumbnail[0].getAttribute("url");
             }
-
         }
 
-        // Clean up description (strip HTML tags) for text summary
+        // Clean text summary
         const tempDiv = document.createElement("div");
         tempDiv.innerHTML = itemDesc;
         const textSummary = tempDiv.textContent.substring(0, 150) + (tempDiv.textContent.length > 150 ? "..." : "");
 
-        // 2. Build Card HTML
+        allArticles.push({
+            title: itemTitle,
+            link: itemLink,
+            content: fullContent || itemDesc, // Prefer full content
+            date: itemDate ? timeAgo(itemDate) : "",
+            originalDate: itemDate, // Store original for sorting if needed
+            feedTitle: feedTitle,
+            feedUrl: feedUrl,
+            image: itemImage,
+            description: itemDesc,
+            textSummary: textSummary
+        });
+    });
+
+    // Second pass: Render cards using the pre-processed data
+    allArticles.forEach((article, index) => {
+        const card = document.createElement("article");
+        card.className = "news-card";
+        card.style.borderLeft = `3px solid ${getFeedColor(feedUrl)}`;
 
         // Body
         const body = document.createElement("div");
         body.className = "card-body";
 
         // Read Time
-        const wordCount = (itemTitle + " " + itemDesc).split(/\s+/).length;
-        const readTime = Math.ceil(wordCount / 200); // 200 wpm
+        const wordCount = (article.title + " " + article.description).split(/\s+/).length;
+        const readTime = Math.ceil(wordCount / 200);
         const timeString = readTime < 1 ? "1 min read" : `${readTime} min read`;
 
-        // Meta (Date + Read Time)
+        // Meta
         const meta = document.createElement("div");
         meta.className = "card-meta";
-        meta.innerHTML = `<span>${itemDate ? timeAgo(itemDate) : ""}</span><span>${timeString}</span>`;
+        meta.innerHTML = `<span>${article.date}</span><span>${timeString}</span>`;
         body.appendChild(meta);
 
         // Title
         const h2 = document.createElement("h3");
         h2.className = "card-title";
-        h2.textContent = itemTitle;
+        h2.textContent = article.title;
         body.appendChild(h2);
 
         // Summary
         const p = document.createElement("p");
         p.className = "card-desc card-limit-lines";
-        p.textContent = textSummary;
+        p.textContent = article.textSummary;
         body.appendChild(p);
 
         // Footer
-        if (itemLink) {
+        if (article.link) {
             const footer = document.createElement("div");
             footer.className = "card-footer";
             footer.style.cssText = "display:flex; align-items:center; gap:8px; flex-wrap:wrap;";
@@ -441,18 +472,12 @@ function renderSmartFeed(root, type, feedUrl) {
             btn.textContent = "Read Article →";
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                openArticleReader({
-                    title: itemTitle,
-                    link: itemLink,
-                    content: fullContent || itemDesc,
-                    date: itemDate ? timeAgo(itemDate) : "",
-                    feedTitle: feedTitle,
-                    feedUrl: feedUrl
-                }, null, index);
+                // PASS FULL LIST HERE!
+                openArticleReader(article, allArticles, index);
             });
             footer.appendChild(btn);
 
-            // Save for Later button
+            // Save for Later
             const saveBtn = document.createElement("button");
             saveBtn.className = "read-btn";
             saveBtn.textContent = "🔖";
@@ -461,12 +486,12 @@ function renderSmartFeed(root, type, feedUrl) {
             saveBtn.addEventListener("click", async (e) => {
                 e.stopPropagation();
                 const added = await addToReadLater({
-                    title: itemTitle,
-                    link: itemLink,
-                    desc: textSummary,
-                    image: itemImage,
-                    feedTitle: feedTitle,
-                    date: itemDate
+                    title: article.title,
+                    link: article.link,
+                    desc: article.textSummary,
+                    image: article.image,
+                    feedTitle: article.feedTitle,
+                    date: article.originalDate
                 });
                 if (added) {
                     saveBtn.textContent = "✅";
@@ -479,7 +504,7 @@ function renderSmartFeed(root, type, feedUrl) {
             });
             footer.appendChild(saveBtn);
 
-            // TTS button
+            // TTS
             const ttsBtn = document.createElement("button");
             ttsBtn.className = "read-btn";
             ttsBtn.textContent = "🔊";
@@ -492,7 +517,7 @@ function renderSmartFeed(root, type, feedUrl) {
                     ttsBtn.textContent = "🔊";
                     return;
                 }
-                const utterance = new SpeechSynthesisUtterance(itemTitle + ". " + tempDiv.textContent);
+                const utterance = new SpeechSynthesisUtterance(article.title + ". " + article.textSummary);
                 utterance.rate = 1.0;
                 utterance.onend = () => { ttsBtn.textContent = "🔊"; };
                 utterance.onstart = () => { ttsBtn.textContent = "⏸️"; };
@@ -500,7 +525,7 @@ function renderSmartFeed(root, type, feedUrl) {
             });
             footer.appendChild(ttsBtn);
 
-            // Translate button
+            // Translate
             const translateBtn = document.createElement("button");
             translateBtn.className = "read-btn";
             translateBtn.textContent = "🌐";
@@ -512,7 +537,6 @@ function renderSmartFeed(root, type, feedUrl) {
                 const descEl = card.querySelector(".card-desc");
                 translateBtn.textContent = "⏳";
                 try {
-                    // Use MyMemory free translation API
                     const textToTranslate = (titleEl?.textContent || "") + " ||| " + (descEl?.textContent || "");
                     const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate.substring(0, 500))}&langpair=autodetect|en`);
                     const data = await res.json();
@@ -534,19 +558,13 @@ function renderSmartFeed(root, type, feedUrl) {
             card.classList.add("clickable-card");
             card.addEventListener("click", (e) => {
                 if (e.target.closest(".read-btn") || e.target.closest("button")) return;
-                openArticleReader({
-                    title: itemTitle,
-                    link: itemLink,
-                    content: fullContent || itemDesc,
-                    date: itemDate ? timeAgo(itemDate) : "",
-                    feedTitle: feedTitle,
-                    feedUrl: feedUrl
-                }, null, index);
+                // PASS FULL LIST HERE TOO!
+                openArticleReader(article, allArticles, index);
             });
         }
 
         // Hidden data for search
-        card.dataset.search = (itemTitle + " " + textSummary).toLowerCase();
+        card.dataset.search = (article.title + " " + article.textSummary).toLowerCase();
 
         card.appendChild(body);
 
@@ -557,13 +575,13 @@ function renderSmartFeed(root, type, feedUrl) {
         // 3D Tilt Effect
         card.addEventListener('mousemove', (e) => {
             const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left; // x position within the element.
-            const y = e.clientY - rect.top;  // y position within the element.
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
             const centerX = rect.width / 2;
             const centerY = rect.height / 2;
 
-            const rotateX = ((y - centerY) / centerY) * -5; // Max rotation deg
+            const rotateX = ((y - centerY) / centerY) * -5;
             const rotateY = ((x - centerX) / centerX) * 5;
 
             card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
